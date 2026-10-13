@@ -32,16 +32,47 @@ ResearchFlow/
 
 ## 本地启动
 
-先安装 Python，然后在 PowerShell 中执行：
+先安装 Conda。打开 Anaconda Prompt，或使用已配置 Conda 的 CMD，依次执行以下步骤。
 
-```powershell
-cd D:\ResearchFlow
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe app\main.py
+1. 进入项目目录：
+
+   ```cmd
+   cd /d D:\ResearchFlow
+   ```
+
+2. 首次配置时创建 Python 3.11 环境：
+
+   ```cmd
+   conda create -n researchflow python=3.11 pip
+   ```
+
+3. 激活项目环境：
+
+   ```cmd
+   conda activate researchflow
+   ```
+
+4. 首次配置时安装依赖：
+
+   ```cmd
+   python -m pip install -r requirements.txt
+   ```
+
+5. 运行项目入口：
+
+   ```cmd
+   python app\main.py
+   ```
+
+以后进入项目目录并激活现有的 `researchflow` 环境即可运行，无需重复创建环境。
+
+在项目目录中，也可以不激活环境，直接运行：
+
+```cmd
+conda run -n researchflow python app\main.py
 ```
 
-当前入口仅输出初始化提示，不调用 API，也不需要 API Key。
+当前入口仅输出 `ResearchFlow is ready.`，不调用 API，也不需要 API Key。
 
 ## 初始依赖
 
@@ -53,10 +84,10 @@ python -m venv .venv
 
 ## 后续 API 配置
 
-`.env.example` 中的 `OPENAI_API_KEY` 是占位示例。后续接入 API 时，可执行：
+`.env.example` 中的 `OPENAI_API_KEY` 是占位示例。后续接入 API 时，可在项目目录中执行：
 
-```powershell
-Copy-Item .env.example .env
+```cmd
+if not exist .env copy .env.example .env
 ```
 
 然后在 `.env` 中填写自己的密钥。当前入口尚未读取 `.env`；`.env` 已列入忽略规则，请勿提交真实密钥。
@@ -65,5 +96,5 @@ Copy-Item .env.example .env
 
 - 基础目录和文件已创建。
 - Git 仓库已初始化，首次提交用于保存项目骨架。
-- 依赖安装尚未进行。
+- 已创建 Conda 环境 `researchflow`，使用 Python 3.11，项目依赖已安装。
 - 学习记录请在 `Agent_Study_Progress.md` 中按实际情况填写。
