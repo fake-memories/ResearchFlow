@@ -2,17 +2,19 @@
 
 ResearchFlow 是一个长期 AI Agent 学习与开发项目，用于准备 AI Agent 开发实习。
 
-Day 1 从项目初始化开始，当前示例演示一次简单的 LLM 问答。
+Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此基础上新增带消息历史和停止条件的多轮示例。
 
 ## 项目结构
 
 ```text
 ResearchFlow/
 ├── app/
-│   └── main.py
+│   ├── main.py
+│   └── agent_loop.py
 ├── tests/
 │   ├── .gitkeep
-│   └── test_main.py
+│   ├── test_main.py
+│   └── test_agent_loop.py
 ├── docs/
 │   └── .gitkeep
 ├── Agent_Study_Progress.md
@@ -23,6 +25,7 @@ ResearchFlow/
 ```
 
 - `app/main.py`：单文件 LLM 问答入口。
+- `app/agent_loop.py`：Day 2 多轮示例，保存本次运行的消息历史，检查完成状态并限制最大步数。
 - `tests/`：存放离线单元测试，使用 `.gitkeep` 在 Git 中保留目录。
 - `docs/`：存放后续项目文档，使用 `.gitkeep` 在 Git 中保留目录。
 - `Agent_Study_Progress.md`：记录每日学习目标、成果和问题。
@@ -101,6 +104,30 @@ conda run -n researchflow python app\main.py
 
 示例只包含输入、模型请求和答案输出，不使用 LangChain、Agent 框架、工具或多轮对话。
 
+## Day 2 多轮示例
+
+在项目目录中激活现有 `researchflow` 环境后运行：
+
+```cmd
+python app\agent_loop.py
+```
+
+也可以直接使用现有环境：
+
+```cmd
+conda run -n researchflow python app\agent_loop.py
+```
+
+示例任务是逐轮补充一份包含三项任务的 AI Agent 入门学习计划，每轮只补充一项。程序每轮发起一次真实模型请求，最多三轮。
+
+- `messages` 起初保存任务；后续加入模型回答和继续指令，使下一轮请求包含前轮结果。这些历史只保存在本次运行的内存中。
+- 回复必须包含任务正文，最后一行必须是独立的 `STATUS: CONTINUE` 或 `STATUS: DONE`，只能有一条独立状态行。
+- 收到 `STATUS: DONE` 时通过 `break` 退出，并显示“模型声明任务完成”。这表示收到结束信号；计划是否包含三项有效任务仍需人工检查。
+- 三轮都未收到完成状态时，显示“达到最大步数（3），任务尚未完成”。
+- 空回答、非法格式和 API 异常会停止循环并给出简短提示。
+
+这是学习消息历史和循环控制的简化流程。后续再逐步加入工具与依据执行结果选择行动的能力。
+
 ## 初始依赖
 
 `requirements.txt` 包含以下依赖，暂不固定版本：
@@ -118,6 +145,8 @@ python -m unittest discover -s tests -v
 ```
 
 测试使用模拟响应，不请求 DeepSeek，也不需要真实密钥。
+
+当前共 14 项测试：Day 1 的 7 项问答与配置测试，以及 Day 2 的 7 项循环与异常测试。
 
 ## 常见问题
 
