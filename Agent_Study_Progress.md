@@ -4,6 +4,8 @@
 
 我希望通过持续学习和开发 ResearchFlow，积累 Python 与 AI Agent 开发实践，为实习做准备。这份笔记保存每天的概念解释、关键代码、开发成果和问题，方便以后忘记时直接查阅和复习。
 
+长期希望把 ResearchFlow 做成面向复杂知识任务的自主研究 Agent，逐步加入论文搜索、PDF 理解、知识库问答和调研报告生成。当前仍是 LLM 应用原型，长期目标不作为已实现的功能。
+
 ## 每日学习与交流约定
 
 1. **开始学习**：回顾前一天的记录，确定今天的目标、学习内容、编码任务、预计时间和验证方法。
@@ -19,12 +21,27 @@
 
 ## 项目状态
 
-- 当前阶段：Day 2 已完成；下一步进入 Prompt 设计与对比实验，继续巩固响应结构和循环边界。
+- 当前阶段：Day 2 已完成；下一步在 Day 3 同时学习 Prompt 基础、JSON 结构化输出和第一个工具函数，提前进入工具使用。
 - 开发环境：Conda 命名环境 `researchflow`，Python 3.11。
 - 当前能力：通过 OpenAI Python SDK 调用 DeepSeek 官方服务，提供单次问答和保存本次运行消息历史的多轮示例；多轮示例支持完成信号及最大步数退出。
 - 已完成：项目初始化、基础异常处理、14 项离线测试和单次问答及三轮流程的真实调用验证。
 - 尚未开始：模型自主选择工具及行动的 Agent、独立 Prompt 设计实验、持久化 Memory、Tool Calling、RAG。
 - 当前版本：尚未发布正式版本。
+
+## 后续学习路线
+
+2026-10-15 根据[学习计划建议](https://chatgpt.com/s/t_6acfc27c4cdc81918f0118bfb297f1f7)调整：基础调用和循环已经有可运行成果，接下来把 Prompt、结构化输出与具体工具任务结合，为模型调用工具做好准备。
+
+| 阶段 | 学习与开发重点 | 状态或验收目标 |
+|---|---|---|
+| Day 1 | Python 环境与第一次 LLM API 调用 | 已完成单次问答及验证 |
+| Day 2 | 消息历史、循环控制与停止条件 | 已完成多轮示例及两种退出路径验证 |
+| Day 3 | Prompt 基础、JSON 输出、论文搜索工具函数 | 待开始；得到可解析的搜索参数，并直接调用工具返回有来源的论文列表 |
+| Day 4 | 模型原生 Function Calling / Tool Calling | 待开始；模型返回工具名和参数，Python 校验后执行，再把工具结果回传给模型 |
+| Day 5 | 第一个最小工具 Agent | 待开始；根据模型决定执行工具、观察结果并继续或结束，保留最大步数和执行记录 |
+| Day 6 起 | RAG 入门 | 待开始；从小文档的分块、检索和带来源的回答开始，再逐步扩展 PDF 与知识库 |
+
+阶段编号表示计划推进顺序，后续依据运行结果和复盘调整，不把计划写成已经完成。论文搜索是第一个具体场景，之后再扩展到更一般的知识任务。
 
 ## Day 1：项目初始化、环境配置与第一个 LLM 问答示例
 
@@ -307,6 +324,7 @@ body = "\n".join(lines[:-1]).strip()
 - 新增 `app/agent_loop.py`，沿用 Day 1 的 SDK 和配置，实现消息历史、完整状态行检查、完成退出与最多三轮限制，并处理空回答、非法格式和 API 异常。
 - 新增 `tests/test_agent_loop.py` 的 7 项离线测试，覆盖消息历史、两种退出路径、边界条件和异常；保留 Day 1 程序及原有测试。
 - 更新 `README.md` 的运行说明。我运行了多轮示例，查看输出，并结合代码理解每一轮是怎样推进的。
+- 复盘后调整 Day 3–6 的学习路线：把 Prompt、JSON 输出和论文搜索工具结合起来，先直接调用函数，再学习模型原生工具调用；同步完善项目说明与协作约定。
 
 ### 成果
 
@@ -315,7 +333,7 @@ body = "\n".join(lines[:-1]).strip()
 - 真实调用验证通过：运行三轮，状态为 `CONTINUE → CONTINUE → DONE`，进程退出码为 0。
 - 我在本地运行后看到了三项带目标和练习的学习任务，第三轮显示完成提示，中文正常。正常结束有运行输出作为证据，上限退出由离线测试验证。
 - `git diff --check` 通过；确认 `.env` 和 Python 缓存目录仍被 Git 忽略。
-- Git 提交和同步：循环代码、测试和说明已提交并同步到 [fake-memories/ResearchFlow](https://github.com/fake-memories/ResearchFlow) 的 `main` 分支，代码提交为 `ae45636`（`Add bounded multi-turn LLM loop`）；学习笔记作为复盘收尾另行提交。
+- Git 提交和同步：循环代码、测试和说明已提交并同步到 [fake-memories/ResearchFlow](https://github.com/fake-memories/ResearchFlow) 的 `main` 分支，代码提交为 `ae45636`（`Add bounded multi-turn LLM loop`）；学习笔记与复盘提交为 `aa14c09`（`Complete Day 2 study notes and review`），已同步。
 
 ### 遇到的问题
 
@@ -337,11 +355,26 @@ body = "\n".join(lines[:-1]).strip()
 
 ### 下一步
 
-- Day 3 学习 Prompt 设计与对比实验，预计 80–100 分钟，尚未开始。
-- 学习 20 分钟：理解任务说明、上下文、输出格式、约束和示例的作用；提示要求需要与程序检查配合。
-- 编码 40–60 分钟：让 `run_loop` 接收任务提示，保留现有循环。A 使用当前提示，B 在相同任务下明确列出“任务、目标、练习、末行状态”的格式；两组使用相同模型、最大步数及请求配置。
-- 验证与复盘 20 分钟：两组各运行一次，保存完整提示、每轮输入消息、输出和退出结果；比较任务重复情况、练习可执行性、三项任务及状态格式的遵循情况。一次比较作为个例观察，不能直接当作稳定效果结论。
-- 交付：可选择两种提示的程序和 `docs/prompt_experiments.md` 实验记录。工具调用与持久化 Memory 留到后续学习。
+Day 3 调整为 **Prompt 基础 + JSON 结构化输出 + 第一个工具函数**，预计约 3 小时，尚未开始。
+
+1. **Prompt 基础，40 分钟**：按角色、任务、上下文、约束、输出格式组织提示；用论文搜索请求作为练习，保存一次实际输入输出。重点是让模型明确要整理哪些参数，而不是凭空生成论文信息。
+2. **JSON 输出，60 分钟**：使用 DeepSeek JSON Output，提示中明确 JSON 格式并提供样例；用标准库 `json.loads()` 解析，检查必需字段、类型及范围。有效 JSON 不等于字段一定正确，空回答、截断和格式错误也要处理。
+3. **工具函数，60 分钟**：实现 `search_paper(query, max_results=3)`，先由 Python 直接调用，再接入真实论文检索接口，优先参考 arXiv API。返回论文标题、来源链接及可获取的年份信息，支持无结果和请求失败的清晰提示。
+4. **验证与复盘，20 分钟**：验证正常 JSON、缺字段、错误类型和非法 JSON；检查工具输入限制、无结果和请求失败。保存至少一次真实检索的关键词、来源及实际返回结果，并补全笔记与 Git 收尾。
+
+计划中的搜索参数格式：
+
+```json
+{"query": "AI agents", "max_results": 3}
+```
+
+`query` 是非空字符串，`max_results` 是 1–5 的整数；只有通过检查后才能作为工具参数使用。工具测试可以用固定离线样例，但样例不是实时搜索结果；网络失败时如实记录，不用样例冒充真实检索成功。
+
+交付目标：结构化输出示例、`app/paper_tools.py` 中的搜索函数、相关验证，以及 `docs/day3_prompt_and_tools.md` 中的定义、关键代码和实际输入输出。现有 Day 1、Day 2 示例保留。
+
+阶段能力边界：Day 3 的工具由 Python 程序直接调用；Day 4 再让模型通过 `tool_calls` 选择函数和参数，Python 负责实际执行并回传结果。普通函数调用、JSON 格式输出与模型原生 Tool Calling 分开学习和记录。
+
+参考：[DeepSeek JSON Output](https://api-docs.deepseek.com/zh-cn/guides/json_mode/)、[DeepSeek Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)、[arXiv API Basics](https://info.arxiv.org/help/api/basics.html)。
 
 ## 每日记录模板
 
