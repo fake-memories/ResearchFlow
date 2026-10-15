@@ -451,7 +451,7 @@ JSON 模式负责输出格式，Python 负责字段、类型和范围。请求�
 - 真实运行 `python -m app.paper_tools` 与 `python -m app.json_output --search`，均在现有 Conda 环境中成功，退出码均为 0；关键词为 `retrieval-augmented generation`，模型数量为整数 `2`，工具实际返回两篇论文，完整标题和来源保存在 `docs/day3_prompt_and_tools.md`。
 - 实际结果：2024 年的 *Automated Literature Review Using NLP Techniques and LLM-Based Retrieval-Augmented Generation*（[arXiv:2411.18583v1](http://arxiv.org/abs/2411.18583v1)）；2025 年的 *Riddle Me This! Stealthy Membership Inference for Retrieval-Augmented Generation*（[arXiv:2502.00306v2](http://arxiv.org/abs/2502.00306v2)）。年份为首次提交年，未逐篇阅读全文。
 - 本地完整流程也已运行，截图显示模型生成 `{"query": "retrieval-augmented generation", "max_results": 2}`，Python 校验通过，并返回上述两篇论文的标题、年份与来源链接，终端已返回命令提示符。2026-10-16 确认了这份运行证据。
-- Git 收尾范围为 3 个程序文件、3 个测试文件、Day 3 文档、README 和学习档案；提交与同步进行中，完成后补充实际结果。
+- Git 提交和同步：3 个程序文件、3 个测试文件、Day 3 文档、README 与学习档案已提交并同步到 [fake-memories/ResearchFlow](https://github.com/fake-memories/ResearchFlow) 的 `main` 分支；功能提交为 `39b48b2`（`Complete Day 3 JSON output and arXiv paper search`），本次收尾笔记补记实际同步结果。
 
 ### 遇到的问题
 
@@ -482,6 +482,8 @@ Day 4 计划学习原生 Tool Calling，预计约 170 分钟（2 小时 50 分�
 5. **验证与复盘，30 分钟**：用离线样例验证正常路径、无需工具、未知工具、非法参数和工具失败；再保存一次真实调用闭环及带来源的最终回答，更新笔记并收尾。
 
 计划交付为 `app/tool_calling.py`、相关离线测试、`docs/day4_tool_calling.md` 与一次真实工具调用记录；继续使用现有 SDK、原生 Python 和已有工具，不增加大型框架。
+
+下一次参考：[DeepSeek Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)。模型提供工具名和参数，具体函数仍由 Python 执行，再按调用 ID 将结果回传。
 
 ## 每日记录模板
 
