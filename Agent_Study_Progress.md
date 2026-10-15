@@ -21,11 +21,11 @@
 
 ## 项目状态
 
-- 当前阶段：Day 2 已完成；下一步在 Day 3 同时学习 Prompt 基础、JSON 结构化输出和第一个工具函数，提前进入工具使用。
+- 当前阶段：Day 3 已完成；下一步在 Day 4 学习模型原生 Tool Calling，复用现有论文搜索函数完成工具结果回传。
 - 开发环境：Conda 命名环境 `researchflow`，Python 3.11。
-- 当前能力：通过 OpenAI Python SDK 调用 DeepSeek 官方服务，提供单次问答和保存本次运行消息历史的多轮示例；多轮示例支持完成信号及最大步数退出。
-- 已完成：项目初始化、基础异常处理、14 项离线测试和单次问答及三轮流程的真实调用验证。
-- 尚未开始：模型自主选择工具及行动的 Agent、独立 Prompt 设计实验、持久化 Memory、Tool Calling、RAG。
+- 当前能力：提供单次问答、带停止条件的多轮示例，以及“需求 → DeepSeek 生成 JSON 参数 → Python 校验 → arXiv 论文检索”的固定流程。
+- 已完成：项目初始化、基础异常处理、45 项离线测试，以及问答、多轮流程、JSON 输出、论文检索及串联的实际运行验证。
+- 尚未开始：模型自主选择工具及行动的 Agent、持久化 Memory、原生 Tool Calling、RAG。
 - 当前版本：尚未发布正式版本。
 
 ## 后续学习路线
@@ -36,7 +36,7 @@
 |---|---|---|
 | Day 1 | Python 环境与第一次 LLM API 调用 | 已完成单次问答及验证 |
 | Day 2 | 消息历史、循环控制与停止条件 | 已完成多轮示例及两种退出路径验证 |
-| Day 3 | Prompt 基础、JSON 输出、论文搜索工具函数 | 待开始；得到可解析的搜索参数，并直接调用工具返回有来源的论文列表 |
+| Day 3 | Prompt 基础、JSON 输出、论文搜索工具函数 | 已完成；参数生成、校验与真实检索均已验证并完成复盘 |
 | Day 4 | 模型原生 Function Calling / Tool Calling | 待开始；模型返回工具名和参数，Python 校验后执行，再把工具结果回传给模型 |
 | Day 5 | 第一个最小工具 Agent | 待开始；根据模型决定执行工具、观察结果并继续或结束，保留最大步数和执行记录 |
 | Day 6 起 | RAG 入门 | 待开始；从小文档的分块、检索和带来源的回答开始，再逐步扩展 PDF 与知识库 |
@@ -375,6 +375,113 @@ Day 3 调整为 **Prompt 基础 + JSON 结构化输出 + 第一个工具函数**
 阶段能力边界：Day 3 的工具由 Python 程序直接调用；Day 4 再让模型通过 `tool_calls` 选择函数和参数，Python 负责实际执行并回传结果。普通函数调用、JSON 格式输出与模型原生 Tool Calling 分开学习和记录。
 
 参考：[DeepSeek JSON Output](https://api-docs.deepseek.com/zh-cn/guides/json_mode/)、[DeepSeek Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)、[arXiv API Basics](https://info.arxiv.org/help/api/basics.html)。
+
+## Day 3：Prompt 基础、JSON 参数校验与论文搜索工具
+
+- 日期：2026-10-15 开始；2026-10-16 完成运行结果确认与学习复盘。
+- 状态：已完成；参数校验、模型 JSON 输出与论文检索串联已验证，易混淆的类型和函数职责已补充说明，后续继续巩固。
+- 预计时间：Prompt 40 分钟；JSON 输出与校验 60 分钟；工具函数 60 分钟；验证与复盘 20 分钟，总计约 3 小时。
+- 实际用时：未统计。
+
+### 目标
+
+1. 按角色、任务、上下文、约束和输出格式编写搜索参数提示词。
+2. 解析并校验 JSON 搜索参数，再接入模型的实际 JSON 输出。
+3. 实现论文搜索函数，由 Python 直接调用并返回有来源的论文结果。
+4. 验证正常输入和错误输入，保存真实模型与检索结果，结束时完成复盘及 Git 同步。
+
+### 今日学习
+
+**1. Prompt 与参数生成**
+
+Prompt 是给模型的任务说明，可明确角色、任务、上下文、约束和输出格式。例如把“搜索两篇 RAG 论文”整理为 `{"query": "retrieval augmented generation", "max_results": 2}`。本阶段模型负责整理搜索条件，论文信息由后续真实搜索工具取得；“相关性高”要结合检索结果判断，不能只靠提示中的要求证明。
+
+**2. JSON 解析与参数校验**
+
+`answer` 保存 JSON 文本；`params = json.loads(answer)` 将文本解析为 Python 数据。JSON 对象解析后是字典，但顶层也可能是列表或其他值，因此解析后先检查是否为字典，再读取字段。
+
+- `2` 是整数，`"2"` 是字符串；两者都是合法 JSON 值，解析时不会自动互相转换。
+- `max_results=0` 的类型正确，但不符合 1–5 的范围要求。
+- 合法 JSON 不等于参数合格。完整检查包含输入是否为空、JSON 格式、顶层类型、必需字段、字段类型和数值范围。
+
+**3. 关键词检查与错误处理**
+
+先通过 `"query" not in params` 检查字段是否缺失，避免直接读取时出现 `KeyError`。用 `isinstance(query, str)` 检查字符串类型，再执行 `query.strip()` 去掉两端空白，最后用 `if not query` 拒绝空关键词。
+
+数量先使用 `type(max_results) is int` 检查，再使用 `1 <= max_results <= 5` 判断范围。补充：Python 中 `bool` 是 `int` 的子类，严格类型检查可以排除布尔值，也会拒绝 `2.0` 和 `"2"`。
+
+不合格输入使用 `raise ValueError(...)` 抛出错误；调用方用 `try/except` 决定怎样处理。函数只有校验全部通过后才返回整理好的参数字典，后续搜索应放在成功返回之后。
+
+**4. 模型 JSON 输出与两条消息**
+
+`system` 消息放参数整理规则，`user` 消息放具体需求。请求设置 `response_format={"type": "json_object"}`，并在提示中明确 JSON 要求和格式样例。模型仍返回文本，提取 `response.choices[0].message.content` 后再调用已有的 `parse_search_params()`。
+
+JSON 模式负责输出格式，Python 负责字段、类型和范围。请求返回后先检查空 `choices` 与 `finish_reason`；`length` 表示长度限制导致生成停止，不能把截断回复当作成功；这里只接受 `stop`，再检查内容是否为空。`finish_reason` 是接口提供的生成结束原因，和 Day 2 文本中自行约定的 `STATUS: DONE` 不同，也不证明答案内容正确。
+
+实际参数的关键词含义、数量是否符合原需求仍需核对。例如数量为整数 `3` 可以通过 1–5 的范围检查，但如果用户明确要两篇，它仍然没有忠实表达需求。
+
+**5. Python 工具函数与真实论文检索**
+
+工具函数接收参数、执行一项具体工作并返回结果。`search_paper(query, max_results=3)` 返回论文列表，每项包含标题 `title`、来源链接 `url`、首次提交年份 `year`；没有结果时返回空列表。函数不打印，入口使用 `print_papers()` 展示结果。
+
+请求使用现有 `requests`，通过 `params` 传递 `search_query`、`max_results` 和相关性排序设置。关键词使用 `all:"检索短语"`；`response.raise_for_status()` 检查 HTTP 错误。arXiv 返回 Atom/XML，使用标准库 `ElementTree` 解析，再按命名空间读取论文条目。模型 JSON 和论文接口 XML 是两个接口的不同数据格式，不能都用 `json.loads()` 读取。
+
+标题来自 `<title>`，来源链接来自 `<id>`，年份来自 `<published>`，表示 arXiv 首次提交年。日期缺失或无效时保留未知，不猜测期刊发表年份。无结果与网络失败不同：前者是正常的空列表，后者要明确报告失败。
+
+`python -m app.paper_tools` 用固定参数直接调用工具；`python -m app.json_output --search` 先请求模型、校验参数，再由 Python 固定调用工具。`--search` 是命令行开关，省略时仍只生成参数。当前没有模型原生 `tool_calls`，也没有将工具结果回传给模型。
+
+### 今日开发
+
+- 新增 `app/structured_output.py`，提供 `parse_search_params(answer)` 和 8 组固定输入的离线演示。函数返回去掉关键词两端空白的 `query` 与通过类型、范围检查的 `max_results`。
+- 新增 `tests/test_structured_output.py` 的 9 项测试，覆盖参数边界、缺字段、空白关键词、非法 JSON 和错误类型等情况。
+- 新增 `docs/day3_prompt_and_tools.md`，保存提示练习、概念、关键代码和实际离线运行结果；更新 `README.md` 的运行方式与项目进度。
+- 离线示例只使用 Python 标准库，不读取密钥或触网；我已在本地运行 8 组示例，结果与预期一致，并有终端截图。
+- 新增 `app/json_output.py`，沿用现有 SDK 和密钥配置，请求模型生成 JSON 参数，再复用已有函数校验；从项目根目录使用 `python -m app.json_output` 运行。
+- 新增 `tests/test_json_output.py` 的 9 项离线测试，覆盖 JSON 请求、空回复、截断、异常结束、字段校验及 API 错误；同步更新文档。
+- 我在本地运行模型 JSON 示例，截图中的关键词为 `Retrieval-Augmented Generation`、数量为整数 `2`，校验通过。
+- 新增 `app/paper_tools.py` 与 10 项离线工具测试，使用已有 `requests` 和标准库完成论文检索；更新 `app/json_output.py`，新增 `--search` 串联入口与 3 项集成测试。
+
+### 成果
+
+- 在现有 `researchflow` 环境（Python 3.11.17）运行离线示例，8 组输入均显示对应的通过或失败提示，退出码 0。
+- 数量为 `2` 时通过；`"2"` 提示必须是整数；`0` 提示必须在 1–5 之间。关键词 `" RAG "` 被整理为 `"RAG"`。
+- 离线校验阶段的完整 23 项测试通过；接入模型入口后新增 9 项测试，完整 32 项测试在沙箱外运行全部通过。
+- 真实运行 `conda run -n researchflow python -m app.json_output` 成功，需求为“帮我找两篇关于 RAG（检索增强生成）的论文。”；模型实际输出 `{"query": "retrieval-augmented generation", "max_results": 2}`，Python 校验通过，进程退出码 0。
+- 新增工具与串联测试后，完整 45 项离线测试在沙箱外全部通过。
+- 真实运行 `python -m app.paper_tools` 与 `python -m app.json_output --search`，均在现有 Conda 环境中成功，退出码均为 0；关键词为 `retrieval-augmented generation`，模型数量为整数 `2`，工具实际返回两篇论文，完整标题和来源保存在 `docs/day3_prompt_and_tools.md`。
+- 实际结果：2024 年的 *Automated Literature Review Using NLP Techniques and LLM-Based Retrieval-Augmented Generation*（[arXiv:2411.18583v1](http://arxiv.org/abs/2411.18583v1)）；2025 年的 *Riddle Me This! Stealthy Membership Inference for Retrieval-Augmented Generation*（[arXiv:2502.00306v2](http://arxiv.org/abs/2502.00306v2)）。年份为首次提交年，未逐篇阅读全文。
+- 本地完整流程也已运行，截图显示模型生成 `{"query": "retrieval-augmented generation", "max_results": 2}`，Python 校验通过，并返回上述两篇论文的标题、年份与来源链接，终端已返回命令提示符。2026-10-16 确认了这份运行证据。
+- Git 收尾范围为 3 个程序文件、3 个测试文件、Day 3 文档、README 和学习档案；提交与同步进行中，完成后补充实际结果。
+
+### 遇到的问题
+
+- 最初没有区分数字 `2` 与字符串 `"2"`；结合双引号、Python 类型和计算示例，已能正确预测三种数量输入的检查结果。
+- 曾把 `generate_search_params()` 理解为访问 arXiv 的步骤。正确分工是：它请求 DeepSeek 生成并校验参数；`search_paper()` 内的 `requests.get()` 才访问 arXiv，并在同一函数中解析 XML、取得论文列表。这个区别已明确，后续继续结合代码巩固。
+- 完整测试曾因沙箱限制无法访问临时目录而失败；更换临时目录仍失败，沙箱外重跑后 23 项通过，测试产生的临时目录已清理。没有修改原有测试或环境配置。
+- 结束复盘时暂时没有不清楚的地方，也没有阻塞后续学习的问题。
+
+### 我的理解
+
+- 今天学习了 Prompt 基础和 JSON 结构化输出，实现了第一个论文搜索工具。实际用时未统计。
+- 我最初通过读代码预测 `2`、`"2"` 和 `0` 对应的分支，没有亲自敲代码运行；之后运行了完整离线示例，实际结果与预测一致。
+- JSON 格式正确后，仍要检查字段是否存在、类型是否正确、值是否符合要求。数量 `0` 虽然是整数，但不符合 1–5 的约定。
+- 我已理解目前讨论的关键词检查和数量检查代码；接下来结合完整函数的实际输出继续巩固。
+- 模型负责生成搜索条件，Python 校验参数并显式调用工具。`params` 是参数字典，`papers` 是工具返回的论文列表；`generate_search_params()` 访问 DeepSeek，`search_paper()` 访问 arXiv 并整理结果。
+- 补充：模型 JSON 模式、`system`/`user` 消息与 `finish_reason` 的作用已结合新代码说明，接下来需要阅读和复述完整请求流程。
+- 补充：论文工具与参数串联已加入项目，仍需结合新代码复述 HTTP 请求、XML 解析、返回列表以及 Python 调用工具的过程。
+- 当天总结：完成了 Prompt 基础、JSON 参数生成与校验，以及第一个论文搜索工具；离线示例和完整流程均已运行，测试与真实检索都有证据。结束时暂时没有不清楚的地方，之后结合新任务继续巩固数据格式和模型与 Python 的分工。
+
+### 下一步
+
+Day 4 计划学习原生 Tool Calling，预计约 170 分钟（2 小时 50 分钟），尚未开始：
+
+1. **复习分工，15 分钟**：复述 `generate_search_params()` 与 `search_paper()` 的职责，确认模型提出请求、Python 实际执行工具。
+2. **工具描述与调用消息，35 分钟**：为 `search_paper` 定义工具名称、用途和参数结构，认识 `tool_calls` 与普通 JSON 文本的区别。
+3. **校验和执行，50 分钟**：新增 `app/tool_calling.py`，只执行已登记的搜索函数，复用现有 JSON 参数校验；处理未知工具、非法参数与执行失败。
+4. **结果回传，40 分钟**：保存模型的工具调用消息，按对应 `tool_call_id` 回传真实工具结果，再请求模型基于检索来源回答。先完成一次工具调用闭环，多步自主循环留到 Day 5。
+5. **验证与复盘，30 分钟**：用离线样例验证正常路径、无需工具、未知工具、非法参数和工具失败；再保存一次真实调用闭环及带来源的最终回答，更新笔记并收尾。
+
+计划交付为 `app/tool_calling.py`、相关离线测试、`docs/day4_tool_calling.md` 与一次真实工具调用记录；继续使用现有 SDK、原生 Python 和已有工具，不增加大型框架。
 
 ## 每日记录模板
 

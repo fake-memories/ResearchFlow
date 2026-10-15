@@ -4,20 +4,20 @@ ResearchFlow 是一个长期 AI Agent 学习与开发项目，用于准备 AI Ag
 
 长期目标是面向复杂知识任务的自主研究 Agent：从论文搜索开始，逐步扩展 PDF 理解、知识库问答和调研报告生成。
 
-当前阶段是 **LLM 应用原型**，已具备单次问答和受步数限制的多轮流程，尚未发布正式版本。
+当前阶段是 **LLM 工具流程原型**，已具备单次问答、受步数限制的多轮流程，以及“模型生成 JSON 参数 → Python 校验 → arXiv 论文检索”的固定流程，尚未发布正式版本。
 
 Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此基础上新增带消息历史和停止条件的多轮示例。
 
 ## 后续路线
 
-以下为待实施计划，按每日复盘调整：
+以下路线按每日复盘调整：
 
-- Day 3：Prompt 基础、JSON 结构化输出和第一个论文搜索工具函数，由 Python 直接调用。
+- Day 3（已完成）：参数校验、模型 JSON 输出与论文搜索串联已通过验证，并完成学习复盘。
 - Day 4：接入模型原生 Function Calling，执行工具并回传结果。
 - Day 5：组合为最小工具 Agent，依据结果继续推进或结束任务。
 - Day 6 起：RAG 入门，再逐步加入 PDF、知识库和调研报告能力。
 
-近期阶段目标是“输入关键词 → 调用搜索函数 → 返回有来源的论文列表”，可作为 `v0.2` 的候选里程碑；完成开发与验证后再决定是否发布。当前代码不提前标记为已完成该里程碑。
+已跑通“输入需求 → 生成搜索参数 → 调用搜索函数 → 返回有来源的论文列表”，可作为 `v0.2` 的候选里程碑；尚未发布正式版本。
 
 ## 项目结构
 
@@ -25,13 +25,20 @@ Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此
 ResearchFlow/
 ├── app/
 │   ├── main.py
-│   └── agent_loop.py
+│   ├── agent_loop.py
+│   ├── structured_output.py
+│   ├── json_output.py
+│   └── paper_tools.py
 ├── tests/
 │   ├── .gitkeep
 │   ├── test_main.py
-│   └── test_agent_loop.py
+│   ├── test_agent_loop.py
+│   ├── test_structured_output.py
+│   ├── test_json_output.py
+│   └── test_paper_tools.py
 ├── docs/
-│   └── .gitkeep
+│   ├── .gitkeep
+│   └── day3_prompt_and_tools.md
 ├── Agent_Study_Progress.md
 ├── README.md
 ├── requirements.txt
@@ -41,6 +48,9 @@ ResearchFlow/
 
 - `app/main.py`：单文件 LLM 问答入口。
 - `app/agent_loop.py`：Day 2 多轮示例，保存本次运行的消息历史，检查完成状态并限制最大步数。
+- `app/structured_output.py`：Day 3 离线示例，将 JSON 文本解析为字典，校验关键词和返回数量。
+- `app/json_output.py`：Day 3 模型 JSON 输出入口，将用户需求转换为搜索参数，并复用已有函数校验。
+- `app/paper_tools.py`：Day 3 论文搜索函数，使用 arXiv API 返回标题、来源链接和首次提交年份。
 - `tests/`：存放离线单元测试，使用 `.gitkeep` 在 Git 中保留目录。
 - `docs/`：存放后续项目文档，使用 `.gitkeep` 在 Git 中保留目录。
 - `Agent_Study_Progress.md`：记录每日学习目标、成果和问题。
@@ -143,13 +153,88 @@ conda run -n researchflow python app\agent_loop.py
 
 这是学习消息历史和循环控制的简化流程。后续再逐步加入工具与依据执行结果选择行动的能力。
 
+## Day 3 JSON 参数校验示例
+
+在项目目录中激活现有环境后运行：
+
+```cmd
+conda activate researchflow
+python app\structured_output.py
+```
+
+也可以直接使用现有环境：
+
+```cmd
+conda run -n researchflow python app\structured_output.py
+```
+
+`parse_search_params(answer)` 接收 JSON 字符串，成功时返回只包含 `query` 和 `max_results` 的字典：
+
+- 顶层必须是 JSON 对象，两个字段都必须存在。
+- `query` 必须是字符串，去掉两端空白后不能为空。
+- `max_results` 必须是 1–5 的整数；字符串、浮点数和布尔值会被拒绝。
+- 输入或参数不合要求时抛出 `ValueError`，交给调用方处理。
+
+入口使用 8 组固定输入，逐例捕获错误并打印结果，便于比较不同检查。它不请求模型或论文接口，也不读取密钥。模型 JSON 输出与论文检索的入口见下文。
+
+概念、关键代码与实际运行结果见 [Day 3 学习文档](docs/day3_prompt_and_tools.md)。
+
+## Day 3 模型 JSON 输出
+
+在项目根目录使用现有环境运行：
+
+```cmd
+conda run -n researchflow python -m app.json_output
+```
+
+已激活 `researchflow` 环境时，也可以运行：
+
+```cmd
+python -m app.json_output
+```
+
+`-m app.json_output` 按模块运行程序，使它能从项目根目录导入 `app.structured_output` 中的校验函数。
+
+此入口会读取已有 `.env` 并发起一次真实 DeepSeek 请求，密钥配置沿用 Day 1。固定需求为“帮我找两篇关于 RAG（检索增强生成）的论文。”。
+
+- `system` 消息说明参数提取规则，`user` 消息提供具体需求。
+- 请求设置 `response_format={"type": "json_object"}`，提示中包含 JSON 格式样例。
+- 检查完成原因和空回复后，打印模型原始 JSON，再调用 `parse_search_params()`。
+- 成功时打印经过校验的参数；截断、异常结束、非法参数或 API 错误会给出提示并退出。
+
+已完成真实调用，返回的关键词为 `retrieval-augmented generation`、数量为整数 `2`，校验通过。字段校验不自动证明参数忠实于需求，关键词含义和数量仍需核对。默认只生成参数，添加下面的 `--search` 后继续检索论文。
+
+## Day 3 论文搜索与完整流程
+
+先用固定关键词直接调用工具，不请求模型、不读取密钥：
+
+```cmd
+conda run -n researchflow python -m app.paper_tools
+```
+
+然后使用模型生成的参数执行搜索：
+
+```cmd
+conda run -n researchflow python -m app.json_output --search
+```
+
+`--search` 是命令行开关，程序先生成并校验 JSON 参数，再执行 `search_paper(query, max_results)`。省略该开关时仍只显示参数。
+
+- 工具接收非空关键词和 1–5 的整数数量，默认最多返回 3 篇；演示入口指定 2 篇。
+- 使用现有 `requests` 请求 arXiv，按短语检索并按相关性排序，标准库解析返回的 Atom/XML。
+- 每篇包含 `title`、`url` 和 `year`；年份来自首次提交日期，缺失或无法解析时显示“年份未知”。
+- 无结果时返回空列表并提示调整关键词；网络、HTTP、查询或数据异常会明确报告失败。
+- 每次只发起一次检索，没有分页或自动重试。连续请求遵守 arXiv 单连接、至少间隔 3 秒的要求。
+
+直接检索与模型参数串联均已真实运行成功，返回两篇带来源链接的论文，结果保存在 Day 3 文档中。搜索由 Python 固定执行；当前尚未使用模型原生 Tool Calling，也未把检索结果回传给模型。
+
 ## 初始依赖
 
 `requirements.txt` 包含以下依赖，暂不固定版本：
 
 - `openai`：使用 OpenAI Python SDK 调用 DeepSeek 兼容接口。
 - `python-dotenv`：读取项目 `.env` 配置。
-- `requests`：用于后续发送 HTTP 请求。
+- `requests`：用于请求 arXiv 论文接口。
 
 ## 离线测试
 
@@ -159,9 +244,9 @@ conda run -n researchflow python app\agent_loop.py
 python -m unittest discover -s tests -v
 ```
 
-测试使用模拟响应，不请求 DeepSeek，也不需要真实密钥。
+测试使用模拟响应，不请求 DeepSeek 或 arXiv，也不需要真实密钥。
 
-当前共 14 项测试：Day 1 的 7 项问答与配置测试，以及 Day 2 的 7 项循环与异常测试。
+当前共 45 项测试：Day 1 的 7 项问答与配置测试、Day 2 的 7 项循环与异常测试，以及 Day 3 的 9 项 JSON 参数校验、12 项模型请求与搜索串联、10 项论文工具测试。
 
 ## 常见问题
 
