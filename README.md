@@ -4,7 +4,7 @@ ResearchFlow 是一个长期 AI Agent 学习与开发项目，用于准备 AI Ag
 
 长期目标是面向复杂知识任务的自主研究 Agent：从论文搜索开始，逐步扩展 PDF 理解、知识库问答和调研报告生成。
 
-当前阶段是 **LLM 工具流程原型**，已具备单次问答、受步数限制的多轮流程、JSON 参数检索流程，以及原生 Tool Calling 的一次搜索与结果回传示例，尚未发布正式版本。
+当前阶段是 **有次数上限的最小工具 Agent**，已具备单次问答、受步数限制的多轮流程、JSON 参数检索流程，以及根据工具结果继续搜索或回答的原生 Tool Calling 循环，尚未发布正式版本。
 
 Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此基础上新增带消息历史和停止条件的多轮示例。
 
@@ -14,7 +14,7 @@ Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此
 
 - Day 3（已完成）：参数校验、模型 JSON 输出与论文搜索串联已通过验证，并完成学习复盘。
 - Day 4（已完成）：原生 Function Calling 的搜索闭环与直接回答均已实际运行，64 项离线测试通过，并完成学习复盘。
-- Day 5：组合为最小工具 Agent，依据结果继续推进或结束任务。
+- Day 5（已完成）：组合为有界最小工具 Agent，依据结果继续搜索或回答；搜索与直接回答均已实际运行，83 项离线测试通过，并完成学习复盘。
 - Day 6 起：RAG 入门，再逐步加入 PDF、知识库和调研报告能力。
 
 已跑通“输入需求 → 生成搜索参数 → 调用搜索函数 → 返回有来源的论文列表”，可作为 `v0.2` 的候选里程碑；尚未发布正式版本。
@@ -29,7 +29,8 @@ ResearchFlow/
 │   ├── structured_output.py
 │   ├── json_output.py
 │   ├── paper_tools.py
-│   └── tool_calling.py
+│   ├── tool_calling.py
+│   └── tool_agent.py
 ├── tests/
 │   ├── .gitkeep
 │   ├── test_main.py
@@ -37,11 +38,13 @@ ResearchFlow/
 │   ├── test_structured_output.py
 │   ├── test_json_output.py
 │   ├── test_paper_tools.py
-│   └── test_tool_calling.py
+│   ├── test_tool_calling.py
+│   └── test_tool_agent.py
 ├── docs/
 │   ├── .gitkeep
 │   ├── day3_prompt_and_tools.md
-│   └── day4_tool_calling.md
+│   ├── day4_tool_calling.md
+│   └── day5_tool_agent.md
 ├── Agent_Study_Progress.md
 ├── README.md
 ├── requirements.txt
@@ -55,6 +58,7 @@ ResearchFlow/
 - `app/json_output.py`：Day 3 模型 JSON 输出入口，将用户需求转换为搜索参数，并复用已有函数校验。
 - `app/paper_tools.py`：Day 3 论文搜索函数，使用 arXiv API 返回标题、来源链接和首次提交年份。
 - `app/tool_calling.py`：Day 4 原生工具调用入口，让模型提出调用请求，Python 校验、执行并回传结果，再请求模型回答。
+- `app/tool_agent.py`：Day 5 最小工具 Agent，保留完整消息历史，最多请求模型三次、执行搜索两次，显示每轮执行记录。
 - `tests/`：存放离线单元测试，使用 `.gitkeep` 在 Git 中保留目录。
 - `docs/`：存放后续项目文档，使用 `.gitkeep` 在 Git 中保留目录。
 - `Agent_Study_Progress.md`：记录每日学习目标、成果和问题。
@@ -254,6 +258,25 @@ python -m app.tool_calling --request "请解释什么是 Tool Calling。"
 
 该入口已完成真实工具调用闭环，返回两篇论文后由模型整理出对应标题、年份和来源链接；本地也已验证一般问题直接回答、无需搜索的路径。代码、流程说明与实际验证结果见 [Day 4 学习文档](docs/day4_tool_calling.md)。每日学习在独立分支进行，结束时再集中更新 `Agent_Study_Progress.md`，确认成果满意后合并回 `main`。
 
+## Day 5 最小工具 Agent
+
+在项目根目录、已激活的 `researchflow` 环境中运行：
+
+```cmd
+python -m app.tool_agent
+python -m app.tool_agent --request "请用一句话解释 Tool Calling，不需要检索论文。"
+```
+
+也可以使用 `conda run -n researchflow python -m app.tool_agent`。入口沿用已有 `.env` 与默认的两篇 RAG 论文需求，每轮都提供工具描述，让模型根据历史决定继续搜索或回答。
+
+- `messages` 在循环外初始化，后续保留完整的 `assistant` 调用请求与对应 `tool_call_id` 的 `tool` 结果。
+- 默认最多请求模型三次、执行搜索两次；先接受有效答案，最后一次响应若仍要求工具则停止，不执行新的搜索。
+- 每轮只处理一条工具调用；未知工具、非法参数或工具失败会明确报错并停止，不自动重试。
+- 第一次搜索前不等待，此后每次搜索前额外等待三秒。终端显示请求编号、成功搜索次数、工具参数、结果和结束状态。
+- 已实际验证一次搜索后回答（两次模型请求、一次搜索）和直接回答（一次模型请求、零次搜索）。两次搜索、达到上限与等待顺序由离线测试覆盖。
+
+关键代码、计数方式、消息历史与真实运行证据见 [Day 5 学习文档](docs/day5_tool_agent.md)。
+
 ## 初始依赖
 
 `requirements.txt` 包含以下依赖，暂不固定版本：
@@ -272,7 +295,7 @@ python -m unittest discover -s tests -v
 
 测试使用模拟响应，不请求 DeepSeek 或 arXiv，也不需要真实密钥。
 
-当前共 64 项测试：Day 1–3 的 45 项测试，以及 Day 4 的 19 项工具调用、消息回传、直接回答和异常处理测试。
+当前共 83 项测试：Day 1–3 的 45 项测试、Day 4 的 19 项工具调用测试，以及 Day 5 的 19 项有界循环测试。Day 5 覆盖请求次数、消息历史、最后一轮正常回答、搜索间隔、空结果与失败停止等行为。
 
 ## 常见问题
 
