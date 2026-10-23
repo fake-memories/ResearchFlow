@@ -4,7 +4,7 @@ ResearchFlow 是一个长期 AI Agent 学习与开发项目，用于准备 AI Ag
 
 长期目标是面向复杂知识任务的自主研究 Agent：从论文搜索开始，逐步扩展 PDF 理解、知识库问答和调研报告生成。
 
-当前阶段是 **有次数上限的最小工具 Agent**，已具备单次问答、受步数限制的多轮流程、JSON 参数检索流程，以及根据工具结果继续搜索或回答的原生 Tool Calling 循环，尚未发布正式版本。
+当前阶段已具备 **有次数上限的最小工具 Agent 与本地文档 RAG**：支持单次问答、受步数限制的多轮流程、JSON 参数检索流程、原生 Tool Calling 循环，以及根据本地文档片段生成带来源的回答，尚未发布正式版本。
 
 Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此基础上新增带消息历史和停止条件的多轮示例。
 
@@ -15,7 +15,9 @@ Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此
 - Day 3（已完成）：参数校验、模型 JSON 输出与论文搜索串联已通过验证，并完成学习复盘。
 - Day 4（已完成）：原生 Function Calling 的搜索闭环与直接回答均已实际运行，64 项离线测试通过，并完成学习复盘。
 - Day 5（已完成）：组合为有界最小工具 Agent，依据结果继续搜索或回答；搜索与直接回答均已实际运行，83 项离线测试通过，并完成学习复盘。
-- Day 6 起：RAG 入门，再逐步加入 PDF、知识库和调研报告能力。
+- Day 6（已完成）：读取本地 Markdown、按段落分块、关键词排序检索、组织来源标签并生成回答；真实回答和无匹配分支已运行，新增 20 项离线测试通过，全套共 103 项通过。
+- Day 7（计划）：接入一份 2–4 页的短文本 PDF，复用现有 RAG，保留页码和片段编号，并用固定问题核对回答来源。
+- 后续：逐步加入 PDF 理解、Embedding 与向量检索、知识库和调研报告能力。
 
 已跑通“输入需求 → 生成搜索参数 → 调用搜索函数 → 返回有来源的论文列表”，可作为 `v0.2` 的候选里程碑；尚未发布正式版本。
 
@@ -30,7 +32,12 @@ ResearchFlow/
 │   ├── json_output.py
 │   ├── paper_tools.py
 │   ├── tool_calling.py
-│   └── tool_agent.py
+│   ├── tool_agent.py
+│   └── local_rag.py
+├── data/
+│   └── sample_docs/
+│       ├── demo_rules.md
+│       └── rag_basics.md
 ├── tests/
 │   ├── .gitkeep
 │   ├── test_main.py
@@ -39,12 +46,14 @@ ResearchFlow/
 │   ├── test_json_output.py
 │   ├── test_paper_tools.py
 │   ├── test_tool_calling.py
-│   └── test_tool_agent.py
+│   ├── test_tool_agent.py
+│   └── test_local_rag.py
 ├── docs/
 │   ├── .gitkeep
 │   ├── day3_prompt_and_tools.md
 │   ├── day4_tool_calling.md
-│   └── day5_tool_agent.md
+│   ├── day5_tool_agent.md
+│   └── day6_local_rag.md
 ├── Agent_Study_Progress.md
 ├── README.md
 ├── requirements.txt
@@ -59,6 +68,8 @@ ResearchFlow/
 - `app/paper_tools.py`：Day 3 论文搜索函数，使用 arXiv API 返回标题、来源链接和首次提交年份。
 - `app/tool_calling.py`：Day 4 原生工具调用入口，让模型提出调用请求，Python 校验、执行并回传结果，再请求模型回答。
 - `app/tool_agent.py`：Day 5 最小工具 Agent，保留完整消息历史，最多请求模型三次、执行搜索两次，显示每轮执行记录。
+- `app/local_rag.py`：Day 6 本地文档 RAG，读取 Markdown、按段落分块、按关键词检索并生成带来源的回答，默认只打印演示。
+- `data/sample_docs/`：Day 6 的两份教学材料，共 4 个段落片段。
 - `tests/`：存放离线单元测试，使用 `.gitkeep` 在 Git 中保留目录。
 - `docs/`：存放后续项目文档，使用 `.gitkeep` 在 Git 中保留目录。
 - `Agent_Study_Progress.md`：记录每日学习目标、成果和问题。
@@ -277,6 +288,27 @@ python -m app.tool_agent --request "请用一句话解释 Tool Calling，不需�
 
 关键代码、计数方式、消息历史与真实运行证据见 [Day 5 学习文档](docs/day5_tool_agent.md)。
 
+## Day 6 本地文档 RAG
+
+在项目根目录、已激活的 `researchflow` 环境中运行：
+
+```cmd
+python -m app.local_rag
+python -m app.local_rag --ask
+python -m app.local_rag --ask --question "演示系统使用什么显卡？" --keywords 显卡
+```
+
+第一条只打印分块、检索与模型消息，不请求模型。`--ask` 沿用已有 `.env` 和 DeepSeek 配置，将问题及检索片段发送给模型，最多请求一次、30 秒超时、无自动重试。
+
+- 材料来自 `data/sample_docs/*.md`，按空行分块，每块保留文件名、编号和正文。
+- 关键词由调用方提供；每个列表项匹配正文就加 1 分，过滤零分、降序排序后取前 `top_k` 块。
+- 默认问题为“根据教学演示约定，每次最多向模型提供几个检索片段？”，默认关键词为“最多”“片段”，`top_k=2`。可用 `--question`、`--keywords`、`--top-k` 分别调整。
+- 无匹配时直接输出“资料中没有足够信息”，在读取密钥和创建客户端前返回，模型请求为 0 次。
+- 已实际运行默认问答，回答“最多 2 个”并引用 `[demo_rules.md#1]`；显卡问题配合关键词“显卡”已验证无匹配、0 次模型请求。
+- 检索目前是字面匹配，问题不会自动变成关键词；引用由提示词要求，事实和引用是否得到材料支持仍需核对。目前尚未加入 PDF 或 Embedding。
+
+分块结构、消息构造、实际回答和验证边界见 [Day 6 学习文档](docs/day6_local_rag.md)。
+
 ## 初始依赖
 
 `requirements.txt` 包含以下依赖，暂不固定版本：
@@ -295,7 +327,13 @@ python -m unittest discover -s tests -v
 
 测试使用模拟响应，不请求 DeepSeek 或 arXiv，也不需要真实密钥。
 
-当前共 83 项测试：Day 1–3 的 45 项测试、Day 4 的 19 项工具调用测试，以及 Day 5 的 19 项有界循环测试。Day 5 覆盖请求次数、消息历史、最后一轮正常回答、搜索间隔、空结果与失败停止等行为。
+当前共 103 项测试：Day 1–3 的 45 项测试、Day 4 的 19 项工具调用测试、Day 5 的 19 项有界循环测试，以及 Day 6 的 20 项本地 RAG 测试。Day 5 覆盖请求次数、消息历史、最后一轮正常回答、搜索间隔、空结果与失败停止等行为；Day 6 覆盖分块、读取、排序检索、消息构造、单次生成与无匹配时跳过配置和模型调用等行为。
+
+Day 6 收尾时已在 `researchflow` 环境中实际运行：新增 20 项测试通过，全套 103 项测试通过。单独运行本地 RAG 测试：
+
+```cmd
+python -B -m unittest discover -s tests -p test_local_rag.py -v
+```
 
 ## 常见问题
 
