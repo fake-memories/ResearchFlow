@@ -154,6 +154,23 @@ class RetrievalTests(unittest.TestCase):
 
 
 class MessageTests(unittest.TestCase):
+    def test_messages_distinguish_pdf_pages_and_preserve_markdown_sources(self):
+        chunks = [
+            {"source": "demo.pdf", "page": 2, "chunk_id": 1, "text": "第二页正文。"},
+            {"source": "demo.pdf", "page": 1, "chunk_id": 1, "text": "第一页正文。"},
+            {"source": "notes.md", "chunk_id": 3, "text": "Markdown 正文。"},
+        ]
+        results = [{"score": 1, "chunk": chunk} for chunk in chunks]
+
+        messages = local_rag.build_messages("材料分别来自哪里？", results)
+
+        content = messages[1]["content"]
+        self.assertIn("[demo.pdf#p2-c1]\n第二页正文。", content)
+        self.assertIn("[demo.pdf#p1-c1]\n第一页正文。", content)
+        self.assertIn("[notes.md#3]\nMarkdown 正文。", content)
+        self.assertLess(content.index("[demo.pdf#p2-c1]"), content.index("[demo.pdf#p1-c1]"))
+        self.assertNotIn("[demo.pdf#1]", content)
+
     def test_messages_keep_ranked_source_order_and_only_selected_text(self):
         question = "每次最多提供几个检索片段？"
         results = sample_results()
