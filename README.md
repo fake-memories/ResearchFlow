@@ -4,7 +4,7 @@ ResearchFlow 是一个长期 AI Agent 学习与开发项目，用于准备 AI Ag
 
 长期目标是面向复杂知识任务的自主研究 Agent：从论文搜索开始，逐步扩展 PDF 理解、知识库问答和调研报告生成。
 
-当前阶段已具备 **有次数上限的最小工具 Agent 与本地文档 RAG**：支持单次问答、受步数限制的多轮流程、JSON 参数检索流程、原生 Tool Calling 循环，以及根据本地文档片段生成带来源的回答，尚未发布正式版本。
+当前阶段已具备 **有次数上限的最小工具 Agent 与 Markdown / 短文本 PDF RAG**：支持单次问答、受步数限制的多轮流程、JSON 参数检索流程、原生 Tool Calling 循环，以及根据本地文档片段生成带来源的回答；PDF 引用保留页码，尚未发布正式版本。
 
 Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此基础上新增带消息历史和停止条件的多轮示例。
 
@@ -16,8 +16,9 @@ Day 1 从项目初始化开始，实现一次简单的 LLM 问答；Day 2 在此
 - Day 4（已完成）：原生 Function Calling 的搜索闭环与直接回答均已实际运行，64 项离线测试通过，并完成学习复盘。
 - Day 5（已完成）：组合为有界最小工具 Agent，依据结果继续搜索或回答；搜索与直接回答均已实际运行，83 项离线测试通过，并完成学习复盘。
 - Day 6（已完成）：读取本地 Markdown、按段落分块、关键词排序检索、组织来源标签并生成回答；真实回答和无匹配分支已运行，新增 20 项离线测试通过，全套共 103 项通过。
-- Day 7（计划）：接入一份 2–4 页的短文本 PDF，复用现有 RAG，保留页码和片段编号，并用固定问题核对回答来源。
-- 后续：逐步加入 PDF 理解、Embedding 与向量检索、知识库和调研报告能力。
+- Day 7（已完成）：三页教学 PDF 逐页加载，保留文件名、页码和页内编号；两个不同页的真实回答与无匹配零请求分支均已验证，新增 9 项测试，全套 112 项通过。
+- Day 8（计划）：Embedding 概念与余弦相似度，先用明确标注的教学向量验证计算和排序，再确定真实 Embedding 的接入方式。
+- 后续：逐步加入真实 Embedding 与向量检索、复杂 PDF 理解、知识库和调研报告能力。
 
 已跑通“输入需求 → 生成搜索参数 → 调用搜索函数 → 返回有来源的论文列表”，可作为 `v0.2` 的候选里程碑；尚未发布正式版本。
 
@@ -33,11 +34,15 @@ ResearchFlow/
 │   ├── paper_tools.py
 │   ├── tool_calling.py
 │   ├── tool_agent.py
-│   └── local_rag.py
+│   ├── local_rag.py
+│   ├── pdf_preview.py
+│   └── pdf_rag.py
 ├── data/
-│   └── sample_docs/
-│       ├── demo_rules.md
-│       └── rag_basics.md
+│   ├── sample_docs/
+│   │   ├── demo_rules.md
+│   │   └── rag_basics.md
+│   └── sample_pdfs/
+│       └── demo.pdf
 ├── tests/
 │   ├── .gitkeep
 │   ├── test_main.py
@@ -47,16 +52,19 @@ ResearchFlow/
 │   ├── test_paper_tools.py
 │   ├── test_tool_calling.py
 │   ├── test_tool_agent.py
-│   └── test_local_rag.py
+│   ├── test_local_rag.py
+│   └── test_pdf_rag.py
 ├── docs/
 │   ├── .gitkeep
 │   ├── day3_prompt_and_tools.md
 │   ├── day4_tool_calling.md
 │   ├── day5_tool_agent.md
-│   └── day6_local_rag.md
+│   ├── day6_local_rag.md
+│   └── day7_pdf_rag.md
 ├── Agent_Study_Progress.md
 ├── README.md
 ├── requirements.txt
+├── .gitattributes
 ├── .gitignore
 └── .env.example
 ```
@@ -69,12 +77,16 @@ ResearchFlow/
 - `app/tool_calling.py`：Day 4 原生工具调用入口，让模型提出调用请求，Python 校验、执行并回传结果，再请求模型回答。
 - `app/tool_agent.py`：Day 5 最小工具 Agent，保留完整消息历史，最多请求模型三次、执行搜索两次，显示每轮执行记录。
 - `app/local_rag.py`：Day 6 本地文档 RAG，读取 Markdown、按段落分块、按关键词检索并生成带来源的回答，默认只打印演示。
+- `app/pdf_preview.py`：Day 7 逐页打印 PDF 提取文本，检查页码和内部换行。
+- `app/pdf_rag.py`：Day 7 PDF RAG，暂按一页一个片段，复用关键词检索和生成，引用保留 PDF 页码。
 - `data/sample_docs/`：Day 6 的两份教学材料，共 4 个段落片段。
+- `data/sample_pdfs/`：Day 7 的三页文本教学 PDF，其中的数量规则仅用于演示。
 - `tests/`：存放离线单元测试，使用 `.gitkeep` 在 Git 中保留目录。
 - `docs/`：存放后续项目文档，使用 `.gitkeep` 在 Git 中保留目录。
 - `Agent_Study_Progress.md`：记录每日学习目标、成果和问题。
 - `README.md`：项目说明和启动方法。
 - `requirements.txt`：Python 依赖清单。
+- `.gitattributes`：将 PDF 作为二进制文件保存，防止 Git 转换换行符。
 - `.gitignore`：忽略本地环境配置、虚拟环境和 Python 缓存。
 - `.env.example`：环境变量示例，不包含真实密钥。
 
@@ -305,17 +317,38 @@ python -m app.local_rag --ask --question "演示系统使用什么显卡？" --k
 - 默认问题为“根据教学演示约定，每次最多向模型提供几个检索片段？”，默认关键词为“最多”“片段”，`top_k=2`。可用 `--question`、`--keywords`、`--top-k` 分别调整。
 - 无匹配时直接输出“资料中没有足够信息”，在读取密钥和创建客户端前返回，模型请求为 0 次。
 - 已实际运行默认问答，回答“最多 2 个”并引用 `[demo_rules.md#1]`；显卡问题配合关键词“显卡”已验证无匹配、0 次模型请求。
-- 检索目前是字面匹配，问题不会自动变成关键词；引用由提示词要求，事实和引用是否得到材料支持仍需核对。目前尚未加入 PDF 或 Embedding。
+- 检索目前是字面匹配，问题不会自动变成关键词；引用由提示词要求，事实和引用是否得到材料支持仍需核对。PDF 入口见下文，Embedding 尚未加入。
 
 分块结构、消息构造、实际回答和验证边界见 [Day 6 学习文档](docs/day6_local_rag.md)。
 
-## 初始依赖
+## Day 7 短文本 PDF RAG
+
+在已有 `researchflow` 环境中通过 `python -m pip install -r requirements.txt` 安装依赖，然后在项目根目录运行：
+
+```cmd
+python -m app.pdf_preview
+python -m app.pdf_rag
+python -m app.pdf_rag --ask
+python -m app.pdf_rag --ask --question "每个片段需要保留哪些信息？" --keywords 来源 编号
+python -m app.pdf_rag --ask --question "演示系统使用什么显卡？" --keywords 显卡
+```
+
+- `pdf_preview` 只查看逐页文字；`pdf_rag` 默认只打印选中的片段和消息，模型请求为 0 次。
+- `--ask` 且有匹配时，将问题和选中的正文发送到已配置的 DeepSeek 服务，最多请求一次、30 秒超时、无自动重试；支持 `--pdf`、`--question`、`--keywords`、`--top-k`。
+- 当前样例为三页文本 PDF，每页一块，来源标签包含文件名、原始页码和页内编号，例如 `[demo.pdf#p2-c1]`；空白页跳过后不压缩后续页码，Markdown 引用格式保持兼容。
+- 已实际验证前两个问答各请求一次，分别引用第 1、2 页；显卡问题配合关键词“显卡”命中零块，直接返回依据不足，模型请求零次。
+- 当前保留页眉、页脚和内部换行；整页分块、字面关键词匹配与人工核对引用仍是现有边界，不处理扫描件 OCR 和复杂多栏阅读顺序。
+
+关键代码、对象区别、运行命令和真实验证见 [Day 7 学习文档](docs/day7_pdf_rag.md)。
+
+## 项目依赖
 
 `requirements.txt` 包含以下依赖，暂不固定版本：
 
 - `openai`：使用 OpenAI Python SDK 调用 DeepSeek 兼容接口。
 - `python-dotenv`：读取项目 `.env` 配置。
 - `requests`：用于请求 arXiv 论文接口。
+- `pypdf`：用于读取 PDF 页面文字；Day 7 实际安装版本为 6.21.3。
 
 ## 离线测试
 
@@ -327,12 +360,18 @@ python -m unittest discover -s tests -v
 
 测试使用模拟响应，不请求 DeepSeek 或 arXiv，也不需要真实密钥。
 
-当前共 103 项测试：Day 1–3 的 45 项测试、Day 4 的 19 项工具调用测试、Day 5 的 19 项有界循环测试，以及 Day 6 的 20 项本地 RAG 测试。Day 5 覆盖请求次数、消息历史、最后一轮正常回答、搜索间隔、空结果与失败停止等行为；Day 6 覆盖分块、读取、排序检索、消息构造、单次生成与无匹配时跳过配置和模型调用等行为。
+当前共 112 项测试：Day 1–3 的 45 项测试、Day 4 的 19 项工具调用测试、Day 5 的 19 项有界循环测试、Day 6 的 20 项本地 RAG 测试，以及 Day 7 的 9 项测试。Day 7 新增 8 项 PDF 加载与请求边界测试、1 项 PDF / Markdown 混合来源测试，覆盖原始页码、来源文件名、预览、单次请求与无匹配零请求等行为。
 
 Day 6 收尾时已在 `researchflow` 环境中实际运行：新增 20 项测试通过，全套 103 项测试通过。单独运行本地 RAG 测试：
 
 ```cmd
 python -B -m unittest discover -s tests -p test_local_rag.py -v
+```
+
+Day 7 已在 `researchflow` 环境中实际运行全套 112 项测试并通过；受限执行环境曾阻止临时目录读写，在允许临时目录访问的环境中重跑通过。单独运行 PDF 测试：
+
+```cmd
+python -B -m unittest discover -s tests -p test_pdf_rag.py -v
 ```
 
 ## 常见问题
